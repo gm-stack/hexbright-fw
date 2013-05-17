@@ -10,6 +10,8 @@
 // pin definitions
 ////////////////////////////////////////////////////////////////////////////
 
+
+
 #define D_RLED_SW   2
 // red LED in end button *and* button switch. Seriously, they couldn't put these on different pins?
 
@@ -35,7 +37,9 @@
 
 
 #define MODE_OFF    0
-
+#define MODE_LOW    1
+#define MODE_MED    2
+#define MODE_HIGH   3
 byte mode = 0;
 
 void setup() {
@@ -56,6 +60,9 @@ void setup() {
 }
 
 byte usbconn = 0;
+byte lastBtnDown = 0;
+unsigned long lastBtnDownTime = 0;
+unsigned long btnUpTime = 0;
 
 void loop() {
   static unsigned long lastTempTime;
@@ -63,12 +70,12 @@ void loop() {
   
   int chargeState = analogRead(A_CHARGE);
   if (chargeState < 128) { // charging
-    pinMode(D_RLED_SW, OUTPUT);
+    //pinMode(D_RLED_SW, OUTPUT);
     byte analogVal = (time / 16) % 255; // TODO HERE: software PWM
-    Serial.println(analogVal);
-    analogWrite(D_RLED_SW, analogVal);
+    //Serial.println(analogVal);
+    //analogWrite(D_RLED_SW, analogVal);
     digitalWrite(D_GLED, LOW);
-    usbconn = 1;
+    //usbconn = 1;
   } else if (chargeState > 768) { // full charged
     pinMode(D_RLED_SW, INPUT);
     digitalWrite(D_GLED, HIGH);
@@ -91,7 +98,7 @@ void loop() {
     {
       Serial.println("Overheating!");
       digitalWrite(D_DRV_MODE, LOW);
-      //mode = MODE_LOW;
+      mode = MODE_LOW;
     }
   }
   
@@ -99,12 +106,97 @@ void loop() {
     pinMode(D_RLED_SW, OUTPUT);
     digitalWrite(D_RLED_SW, LOW);
     pinMode(D_RLED_SW, INPUT);
-    
-    if (digitalRead(D_RLED_SW)) {
+  }
+ 
+ byte btnDown = digitalRead(D_RLED_SW);
+ if ((!lastBtnDown) && (btnDown)) {
+   lastBtnDownTime = millis();
+ }
+ if ((lastBtnDown) && (!btnDown)) {
+   btnUpTime = millis() - lastBtnDownTime;
+   Serial.print("button down for ");
+   Serial.println(btnUpTime);
+ }
+ lastBtnDown = btnDown;
+ 
+ if (btnUpTime && btnUpTime <= 500) {
+   btnUpTime = 0;
+   switch (mode) {
+     case MODE_OFF:
+       mode = MODE_LOW;
+       break;
+     case MODE_LOW:
+       mode = MODE_MED;
+       break;
+     case MODE_MED:
+       mode = MODE_HIGH;
+       break;
+     case MODE_HIGH:
+       mode = MODE_OFF;
+       break;
+   }
+   Serial.print("mode is ");
+   Serial.println(mode);
+ }
+ 
+ if (btnUpTime > 500 && btnUpTime <= 1000) {
+   btnUpTime = 0;
+   switch (mode) {
+     case MODE_OFF:
+       mode = MODE_OFF;
+       break;
+     case MODE_LOW:
+       mode = MODE_OFF;
+       break;
+     case MODE_MED:
+       mode = MODE_OFF;
+       break;
+     case MODE_HIGH:
+       mode = MODE_OFF;
+       break;
+   }
+   Serial.print("mode is ");
+   Serial.println(mode);
+ }
+ 
+ 
+ 
+ switch(mode) {
+   case MODE_OFF:
+     pinMode(D_PWR, OUTPUT);
+     digitalWrite(D_PWR, LOW);
+     digitalWrite(D_DRV_MODE, LOW);
+     digitalWrite(D_DRV_EN, LOW);
+     break;
+   case MODE_LOW:
+     pinMode(D_PWR, OUTPUT);
+     digitalWrite(D_PWR, HIGH);
+     digitalWrite(D_DRV_MODE, LOW);
+     analogWrite(D_DRV_EN, 64);
+     break;
+    case MODE_MED:
+     pinMode(D_PWR, OUTPUT);
+     digitalWrite(D_PWR, HIGH);
+     digitalWrite(D_DRV_MODE, LOW);
+     analogWrite(D_DRV_EN, 255);
+     break;
+    case MODE_HIGH:
+     pinMode(D_PWR, OUTPUT);
+     digitalWrite(D_PWR, HIGH);
+     digitalWrite(D_DRV_MODE, HIGH);
+     analogWrite(D_DRV_EN, 255);
+     break;
+ }
+     
+     
+     
+     /*  if (digitalRead(D_RLED_SW)) {
       digitalWrite(D_DRV_EN, HIGH);
     } else {
       digitalWrite(D_DRV_EN, LOW);
     }
-  }
+  }*/
+  
+  
 
 }
