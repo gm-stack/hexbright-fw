@@ -152,7 +152,10 @@ void loop() {
     {
       Serial.println("Overheating!");
       digitalWrite(D_DRV_MODE, LOW);
+      mode_switch_time = millis();
       mode = MODE_LOW;
+      prevBrightness = targetBrightness;
+      targetBrightness = 64;
     }
   }
   
