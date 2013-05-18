@@ -6,6 +6,7 @@
 ////////////////////////////////////////////////////////////////////////////
 #define OVERTEMP  340
 #define FADE_TIME 100
+//#define CHG_RED
 
 ////////////////////////////////////////////////////////////////////////////
 // pin definitions
@@ -107,6 +108,7 @@ void checkPower() {
 
 byte usbconn = 0;
 byte lastBtnDown = 0;
+byte btnDownLatch = 0;
 unsigned long lastBtnDownTime = 0;
 unsigned long btnUpTime = 0;
 unsigned long mode_switch_time = 0;
@@ -120,12 +122,14 @@ void loop() {
   
   int chargeState = analogRead(A_CHARGE);
   if (chargeState < 128) { // charging
-    //pinMode(D_RLED_SW, OUTPUT);
     byte analogVal = (time / 16) % 255; // TODO HERE: software PWM
     //Serial.println(analogVal);
-    //analogWrite(D_RLED_SW, analogVal);
+    #ifdef CHG_RED
+    pinMode(D_RLED_SW, OUTPUT);
+    digitalWrite(D_RLED_SW, HIGH);
+    #endif
     digitalWrite(D_GLED, LOW);
-    //usbconn = 1;
+    usbconn = 1;
   } else if (chargeState > 768) { // full charged
     pinMode(D_RLED_SW, INPUT);
     digitalWrite(D_GLED, HIGH);
@@ -159,13 +163,21 @@ void loop() {
   }
  
  byte btnDown = digitalRead(D_RLED_SW);
+
  if ((!lastBtnDown) && (btnDown)) {
    lastBtnDownTime = millis();
+   btnDownLatch = 0;
  }
  if (((lastBtnDown) && (!btnDown)) || (((millis() - lastBtnDownTime) > 500) && btnDown)) {
-   btnUpTime = millis() - lastBtnDownTime;
-   Serial.print("button down for ");
-   Serial.println(btnUpTime);
+   if (!btnDownLatch) {
+     btnUpTime = millis() - lastBtnDownTime;
+     Serial.print("button down for ");
+     Serial.println(btnUpTime);
+     btnDownLatch = 1;
+   } else {
+     btnUpTime = 0;
+     delay(10);
+   }
  }
  lastBtnDown = btnDown;
  
@@ -200,7 +212,7 @@ void loop() {
    Serial.println(mode);
  }
  
- if (btnUpTime > 500 && btnUpTime <= 1000) {
+ if (btnUpTime > 500) {
    btnUpTime = 0;
    switch (mode) {
      case MODE_OFF:
@@ -208,12 +220,10 @@ void loop() {
        checkPower();
        break;
      case MODE_LOW:
-       mode = MODE_OFF;
-       break;
      case MODE_MED:
-       mode = MODE_OFF;
-       break;
      case MODE_HIGH:
+       prevBrightness = 0;
+       targetBrightness = 0;
        mode = MODE_OFF;
        break;
    }
@@ -229,6 +239,7 @@ void loop() {
      digitalWrite(D_PWR, LOW);
      digitalWrite(D_DRV_MODE, LOW);
      digitalWrite(D_DRV_EN, LOW);
+     while(digitalRead(D_RLED_SW)) {};
      break;
    case MODE_LOW:
      pinMode(D_PWR, OUTPUT);
@@ -247,7 +258,9 @@ void loop() {
      break;
  }
  
- int currTime = millis() - mode_switch_time;
+ unsigned long currTime = millis() - mode_switch_time;
+ //Serial.print("currTime = ");
+ //Serial.println(currTime);
  if (currTime <= FADE_TIME) {
    nowBrightness = map(currTime, 0, FADE_TIME, prevBrightness, targetBrightness);
    analogWrite(D_DRV_EN, nowBrightness);
